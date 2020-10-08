@@ -9,7 +9,7 @@ cartTopPop = 20*mm;
 doorHeight=2.5*m;
 doorWidth=3*m;
 gapRunnerToDoor=200*mm;
-extraRunner=200*mm;
+extraRail=200*mm;
 gapRunnerToCart=5*mm;
 wheelRadius=30*mm;
 steelWidth=30*mm;
@@ -17,6 +17,21 @@ steelThickness=2*mm;
 washerWidth = 2*mm;
 nutInset = 8*mm;
 clh = 0.1; // height clearance inside nut catch
+
+function totalSteel() =
+  4*doorWidth + // horizontals
+  2*doorHeight + // verticals
+  6*(doorHeight/3)*sqrt(2) + // diag bracing
+  2*(
+     gapRunnerToDoor +
+     2*steelWidth + 2*wheelRadius*sqrt(2) +
+     steelWidth + cartTop +
+     2*wheelRadius*sqrt(2) + steelWidth
+  ) + // carts
+  1*(2*doorWidth + 2*extraRail); // rail
+
+echo("Total steel used (meters):");
+echo(totalSteel() / 1000);
 
 Plastic = [0, 0.5, 1];
 
@@ -76,7 +91,7 @@ module roundedSquare(width, cornerRadius, center=false) {
     }
 }
 
-module squareTubeSteel(width, length, thickness, center=false) {
+module squareTubeSteel(width, length, thickness=2*mm, center=false) {
   color(Stainless)
   linear_extrude(height=length)
   difference() {
@@ -185,10 +200,10 @@ module cartDoorConnection() {
   translate([0, -steelWidth/2, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRunnerToCart])
     rotate(-90, [1, 0, 0])
       squareTubeSteel(width=steelWidth,
-                      length=2*steelWidth + wheelRadius*2/sqrt(2),
+                      length=2*steelWidth + wheelRadius*2/sqrt(2) + steelWidth/2,
                       center=true);
   // Zag (vertical)
-  translate([0, steelWidth + wheelRadius*2/sqrt(2), -steelWidth*sqrt(2)/2 - gapRunnerToCart])
+  translate([0, 3*steelWidth/2 + wheelRadius*2/sqrt(2), -steelWidth*sqrt(2)/2 - gapRunnerToCart])
     squareTubeSteel(width=steelWidth,
                     length=steelWidth + toDiag(steelWidth)/2 + cartTop + gapRunnerToCart,
                     center=true);
@@ -196,39 +211,40 @@ module cartDoorConnection() {
   translate([0, -steelWidth/2, steelWidth/2 + cartTop])
     rotate(-90, [1, 0, 0])
       squareTubeSteel(width=steelWidth,
-                      length=wheelRadius*2/sqrt(2) + steelWidth,
+                      length=wheelRadius*2/sqrt(2) + 3*steelWidth/2,
                       center=true);
 }
 
 module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
   module sides() {
-    translate([0, 0, -doorHeight])
+    translate([0, 0, -doorHeight + steelWidth/2])
       squareTubeSteel(width=steelWidth, length=doorHeight, center=true);
-    translate([doorWidth, 0, -doorHeight])
+    translate([doorWidth, 0, -doorHeight + steelWidth/2])
       squareTubeSteel(width=steelWidth, length=doorHeight, center=true);
   }
   module horizontals() {
-    rotate(90, [0, 1, 0])
-      squareTubeSteel(width=steelWidth, length=doorWidth, center=true);
-    translate([0, 0, -doorHeight/3])
-      rotate(90, [0, 1, 0])
-        squareTubeSteel(width=steelWidth, length=doorWidth, center=true);
-    translate([0, 0, -2*doorHeight/3])
-      rotate(90, [0, 1, 0])
-        squareTubeSteel(width=steelWidth, length=doorWidth, center=true);
-    translate([0, 0, -doorHeight])
-      rotate(90, [0, 1, 0])
-        squareTubeSteel(width=steelWidth, length=doorWidth, center=true);
+    module horizontalPositions() {
+      translate([0, 0, -doorHeight + steelWidth])
+        rotate(90, [0, 1, 0])
+          {
+            children();
+            translate([-(doorHeight - steelWidth)/3, 0, 0]) children();
+            translate([-2*(doorHeight - steelWidth)/3, 0, 0]) children();
+            translate([-(doorHeight - steelWidth), 0, 0]) children();
+          }
+    }
+    horizontalPositions()
+      squareTubeSteel(width=steelWidth, length=doorWidth - steelWidth, center=true);
   }
   module diagBracing() {
     module oneWay() {
-      translate([0, 0, -doorHeight])
+      translate([0, 0, -(doorHeight - steelWidth)])
         rotate(45, [0, 1, 0])
           squareTubeSteel(width=steelWidth, length=sqrt(2)*doorHeight/3, center=true);
-      translate([0, 0, -doorHeight/3])
+      translate([0, 0, -(doorHeight - steelWidth)/3])
         rotate(45, [0, 1, 0])
           squareTubeSteel(width=steelWidth, length=sqrt(2)*doorHeight/3, center=true);
-      translate([0, 0, -2*doorHeight/3])
+      translate([0, 0, -2*(doorHeight - steelWidth)/3])
         rotate(45, [0, 1, 0])
           squareTubeSteel(width=steelWidth, length=sqrt(2)*doorHeight/3, center=true);
     }
@@ -238,8 +254,18 @@ module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
         oneWay();
   }
   sides();
-  horizontals();
+  translate([+steelWidth/2, 0, 0])
+    horizontals();
   diagBracing();
+}
+
+module rail() {
+  translate([-extraRail, 0, 0]) rotate(90, [0, 1, 0])
+    rotate(45, [0, 0, 1])
+      squareTubeSteel(width=steelWidth,
+                      length=2*doorWidth + 2*extraRail,
+                      thickness=steelThickness,
+                      center=true);
 }
 
 module rollerDoor() {
@@ -250,13 +276,7 @@ module rollerDoor() {
       angleWheelRollerAssembly();
       cartDoorConnection();
     }
-  // Steel runner
-  translate([-extraRunner, 0, 0]) rotate(90, [0, 1, 0])
-    rotate(45, [0, 0, 1])
-      squareTubeSteel(width=steelWidth,
-                      length=2*doorWidth + 2*extraRunner,
-                      thickness=steelThickness,
-                      center=true);
+  rail();
   translate([0, 0, -gapRunnerToDoor - steelWidth/2])
     doorFrame(doorHeight, doorWidth, steelWidth, steelThickness);
 }
