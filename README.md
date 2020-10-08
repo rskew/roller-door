@@ -1,5 +1,7 @@
 # Roller Door
 
+3D model of a rolling door made with (OpenSCAD)[http://www.openscad.org/]
+
 Should make a nice swishing sound on 608 type bearings (skateboard bearings).
 
 ## Using
