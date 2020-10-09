@@ -9,28 +9,19 @@ bearingModel = 608;
 doorHeight = 2.5*m;
 doorWidth = 3*m;
 extraRail = 200*mm;
-gapRailToCart = 5*mm;
+extraGapRailToCart = 5*mm;
 wheelRadius = 20*mm;
 steelWidth = 30*mm;
 wheelClearance = 8*mm;
 steelThickness = 2*mm;
 washerWidth = 2*mm;
 nutInset = 8*mm;
-clh = 0.1; // height clearance inside nut catch
-
-function totalSteel() =
-  4*doorWidth + // horizontals
-  2*doorHeight + // verticals
-  6*(doorHeight/3)*sqrt(2) + // diag bracing
-  2*(
-     2*steelWidth + 2*wheelRadius*sqrt(2) +
-     //steelWidth + cartTop +
-     2*wheelRadius*sqrt(2) + steelWidth
-  ) + // carts
-  1*(2*doorWidth + 2*extraRail); // rail
-
-echo("Total steel used (meters):");
-echo(totalSteel() / 1000);
+// height clearance inside nut catch
+clh = 0.1;
+// So the nut trap fits inside the steel square tube
+nutTrapClearanceFactor = 0.01;
+// The nuts clash inside the cart, so move them by a fudge-factor
+fudge = 1*mm;
 
 Plastic = [0, 0.5, 1];
 
@@ -40,6 +31,12 @@ function toDiag(x) = x * sqrt(2);
 wheelWidth = 2*bearingDimensions(model=bearingModel)[2];
 wheelShift = fromDiag(wheelRadius + steelWidth/2);
 nutheight = _get_nut_height("M8");
+cartPosition = [-steelWidth/2, 0, toDiag(steelWidth/2 + wheelRadius)];
+gapRailToCart = extraGapRailToCart + steelWidth - toDiag(steelWidth/2);
+halfCartWidth =
+  toDiag(steelWidth/4)
+  + fromDiag(wheelRadius*2)
+  + wheelWidth;
 
 module m8Washer(radius=8*mm, thickness=2*mm, center=false) {
   difference() {
@@ -82,8 +79,8 @@ module wheelAssembly(center=false) {
   dualBearing(center=center);
 }
 
-module cart() {
-  translate([-steelWidth/2, 0, toDiag(steelWidth/2 + wheelRadius)])
+module cart(position) {
+  translate(position)
   rotate(45, [1, 0, 0])
     rotate(90, [0, 1, 0])
       doorTube(length=steelWidth, center=true);
@@ -91,25 +88,15 @@ module cart() {
 
 module angleWheelRollerAssembly() {
     module wheelPositions() {
-      translate([0, wheelShift, wheelShift])
-        rotate(45, [1, 0, 0])
-          translate([0, 0, -wheelWidth/2])
-            children();
-      translate([0, -wheelShift, wheelShift])
-        rotate(-45, [1, 0, 0])
-          translate([0, 0, -wheelWidth/2])
-            children();
-    }
-    module wheel_nuts_position() {
-      translate([0, -wheelShift, wheelShift])
-        rotate(135, [1, 0, 0])
-          translate([0, 0, -(wheelWidth/2 + nutheight/2 + nutInset)])
-            translate([0, 0, nutheight/2])
+      translate([0, fudge, fudge])
+        translate([0, wheelShift, wheelShift])
+          rotate(45, [1, 0, 0])
+            translate([0, 0, -wheelWidth/4])
               children();
-      translate([0, wheelShift, wheelShift])
-        rotate(-135, [1, 0, 0])
-          translate([0, 0, -(wheelWidth/2 + nutheight/2 + nutInset)])
-            translate([0, 0, nutheight/2])
+      translate([0, -fudge, fudge])
+        translate([0, -wheelShift, wheelShift])
+          rotate(-45, [1, 0, 0])
+            translate([0, 0, -wheelWidth/4])
               children();
     }
     module washers() {
@@ -120,31 +107,50 @@ module angleWheelRollerAssembly() {
         translate([0, 0, wheelWidth/2 + washerWidth/2])
           m8Washer(center=true);
     }
+    module innerNutPositions() {
+      wheelPositions()
+        translate([0, 0, steelWidth/2 + wheelRadius - 3*wheelWidth/4 + nutheight + steelThickness/2])
+          children();
+    }
     module nuts() {
       wheelPositions()
         translate([0, 0, wheelWidth/2 + washerWidth + nutheight])
           nut("M8");
       wheelPositions()
-        translate([0, 0, steelWidth/2 + wheelRadius - wheelWidth/2 - steelThickness/2])
+        translate([0, 0, steelWidth/2 + wheelRadius - 3*wheelWidth/4 - steelThickness/2])
           nut("M8");
-      #wheelPositions()
-        translate([0, 0, steelWidth/2 + wheelRadius - wheelWidth/2 + nutheight + steelThickness/2])
-          nut("M8");
+      innerNutPositions()
+        nut("M8");
     }
-    module bolts() {
+    module bolts(extendFactor=1) {
       wheelPositions()
         translate([0, 0, -(washerWidth/2 + _get_head_height("M8"))])
           rotate(180, [1, 0, 0])
-            screw("M8x45");
+            scale([1, 1, extendFactor])
+              screw("M8x40");
     }
-    wheelPositions()
-      wheelAssembly(center=true);
+    module nutTrap() {
+      scale([1, 1 - nutTrapClearanceFactor, 1 - nutTrapClearanceFactor])
+        difference() {
+          hull()
+            translate(cartPosition)
+              scale([1, 0.9, 0.9])
+                cart([0, 0, 0]);
+          cart(cartPosition);
+          nuts();
+          bolts(extendFactor=2);
+          innerNutPositions()
+            nutcatch_sidecut("M8");
+        }
+    }
+    wheelPositions() wheelAssembly(center=true);
     color(Stainless) {
-      cart();
+      cart(cartPosition);
       bolts();
       washers();
       nuts();
     }
+    color(Plastic) nutTrap();
 }
 
 module doorTube(length, center=false) {
@@ -157,10 +163,6 @@ module doorTube(length, center=false) {
 }
 
 module cartDoorConnection() {
-  halfCartWidth =
-    toDiag(steelWidth/4)
-    + fromDiag(wheelRadius*2)
-    + wheelWidth;
   // horizontal
   translate([0, -steelWidth/2, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRailToCart])
     rotate(-90, [1, 0, 0])
@@ -185,7 +187,7 @@ module cartDoorConnection() {
         doorTube(length=steelWidth/2 + halfCartWidth + 2*steelWidth,
                  center=true);
     hull() scale([2, 1, 1])
-      cart();
+      cart(cartPosition);
   }
 }
 
@@ -215,11 +217,11 @@ module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
                  center=true);
     }
     module twoSlash() {
-      translate([0, 0, -(doorHeight/2 - steelWidth)/2])
+      translate([0, 0, -(doorHeight/2 - steelWidth)/2]) {
+        oneSlash();
         rotate(180, [1, 0, 0])
           oneSlash();
-      translate([0, 0, -(doorHeight/2 - steelWidth)/2])
-        oneSlash();
+      }
     }
     module leftBracing() {
       twoSlash();
@@ -245,19 +247,39 @@ module rail() {
     rotate(45, [0, 0, 1])
       doorTube(length=2*doorWidth + 2*extraRail,
                center=true);
+  module bracket() {
+    translate([0, toDiag(steelWidth/2), -steelWidth/2])
+      rotate(90, [1, 0, 0])
+        doorTube(length=halfCartWidth + toDiag(steelWidth), center=true);
+    translate([0, -halfCartWidth/2, -3*steelWidth/2])
+      rotate(90, [1, 0, 0])
+        doorTube(length=(halfCartWidth + toDiag(steelWidth))/2, center=true);
+    translate([0,
+                -(halfCartWidth + toDiag(steelWidth/2) + steelWidth/2),
+                -2*steelWidth])
+      doorTube(length=3*steelWidth, center=true);
+  }
+  translate([-extraRail + 3*steelWidth/2, 0, 0])
+    bracket();
+  translate([doorWidth, 0, 0])
+    bracket();
+  translate([2*doorWidth - (-extraRail + 3*steelWidth/2), 0, 0])
+    bracket();
 }
 
 module rollerDoor() {
-  angleWheelRollerAssembly();
-  cartDoorConnection();
-  translate([doorWidth, 0, 0])
-    {
-      angleWheelRollerAssembly();
-      cartDoorConnection();
-    }
   rail();
-  translate([0, 0, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRailToCart])
-    doorFrame(doorHeight, doorWidth, steelWidth, steelThickness);
+  translate([0, 0, -fudge]) {
+    angleWheelRollerAssembly();
+    cartDoorConnection();
+    translate([doorWidth, 0, 0])
+      {
+        angleWheelRollerAssembly();
+        cartDoorConnection();
+      }
+    translate([0, 0, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRailToCart])
+      doorFrame(doorHeight, doorWidth, steelWidth, steelThickness);
+  }
 }
 
 rollerDoor($fn=30);
