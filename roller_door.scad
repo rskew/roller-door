@@ -8,12 +8,17 @@ include <squareTubeSteel.scad>
 bearingModel = 608;
 doorHeight = 2.5*m;
 doorWidth = 3*m;
-extraRail = 200*mm;
+// TODO remove
+extraRail = 100*mm;
+// TODO remove
 extraGapRailToCart = 5*mm;
+extraGapRailToDoor = 5*mm;
 wheelRadius = 20*mm;
-steelWidth = 30*mm;
+doorSteelWidth = 20*mm;
+railSteelWidth = 30*mm;
 wheelClearance = 8*mm;
-steelThickness = 2*mm;
+doorSteelThickness = 1.6*mm;
+railSteelThickness = 2*mm;
 washerWidth = 2*mm;
 nutInset = 8*mm;
 // height clearance inside nut catch
@@ -29,14 +34,32 @@ function fromDiag(x) = x / sqrt(2);
 function toDiag(x) = x * sqrt(2);
 
 wheelWidth = 2*bearingDimensions(model=bearingModel)[2];
-wheelShift = fromDiag(wheelRadius + steelWidth/2);
+wheelShift = fromDiag(wheelRadius + railSteelWidth/2);
 nutheight = _get_nut_height("M8");
-cartPosition = [-steelWidth/2, 0, toDiag(steelWidth/2 + wheelRadius)];
-gapRailToCart = extraGapRailToCart + steelWidth - toDiag(steelWidth/2);
+cartPosition = [-doorSteelWidth/2, 0, toDiag(railSteelWidth/2 + wheelRadius)];
+gapRailToCart = extraGapRailToCart + railSteelWidth - toDiag(railSteelWidth/2);
 halfCartWidth =
-  toDiag(steelWidth/4)
+  toDiag(railSteelWidth/4)
   + fromDiag(wheelRadius*2)
   + wheelWidth;
+
+module doorTube(length, center=false) {
+  squareTubeSteel(
+    width=doorSteelWidth,
+    length=length,
+    thickness=doorSteelThickness,
+    center=center
+  );
+}
+
+module railTube(length, center=false) {
+  squareTubeSteel(
+    width=railSteelWidth,
+    length=length,
+    thickness=railSteelThickness,
+    center=center
+  );
+}
 
 module m8Washer(radius=8*mm, thickness=2*mm, center=false) {
   difference() {
@@ -83,7 +106,7 @@ module cart(position) {
   translate(position)
   rotate(45, [1, 0, 0])
     rotate(90, [0, 1, 0])
-      doorTube(length=steelWidth, center=true);
+      railTube(length=doorSteelWidth, center=true);
 }
 
 module angleWheelRollerAssembly() {
@@ -109,7 +132,7 @@ module angleWheelRollerAssembly() {
     }
     module innerNutPositions() {
       wheelPositions()
-        translate([0, 0, steelWidth/2 + wheelRadius - 3*wheelWidth/4 + nutheight + steelThickness/2])
+        translate([0, 0, railSteelWidth/2 + wheelRadius - 3*wheelWidth/4 + nutheight + railSteelThickness/2])
           children();
     }
     module nuts() {
@@ -117,7 +140,7 @@ module angleWheelRollerAssembly() {
         translate([0, 0, wheelWidth/2 + washerWidth + nutheight])
           nut("M8");
       wheelPositions()
-        translate([0, 0, steelWidth/2 + wheelRadius - 3*wheelWidth/4 - steelThickness/2])
+        translate([0, 0, railSteelWidth/2 + wheelRadius - 3*wheelWidth/4 - railSteelThickness/2])
           nut("M8");
       innerNutPositions()
         nut("M8");
@@ -153,62 +176,55 @@ module angleWheelRollerAssembly() {
     color(Plastic) nutTrap();
 }
 
-module doorTube(length, center=false) {
-  squareTubeSteel(
-    width=steelWidth,
-    length=length,
-    thickness=steelThickness,
-    center=center
-  );
-}
-
 module cartDoorConnection() {
   // horizontal
-  translate([0, -steelWidth/2, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRailToCart])
+  horizontalLength = 3*doorSteelWidth/2 + halfCartWidth + doorSteelWidth;
+  translate([0, -doorSteelWidth/2, -toDiag(railSteelWidth/2) - doorSteelWidth/2 - extraGapRailToDoor])
     rotate(-90, [1, 0, 0])
-      doorTube(length=3*steelWidth/2 + halfCartWidth + steelWidth, center=true);
+      doorTube(length=horizontalLength, center=true);
   // diagonal
   translate([0,
-             steelWidth/2 - fromDiag(steelWidth/2),
-             -(toDiag(steelWidth + wheelRadius) + gapRailToCart + 3*steelWidth - toDiag(steelWidth/2))])
+             doorSteelWidth/2 - fromDiag(doorSteelWidth/2),
+             -(toDiag(railSteelWidth + wheelRadius) + extraGapRailToDoor + 3*doorSteelWidth - toDiag(doorSteelWidth/2))])
     rotate(-45, [1, 0, 0])
-      doorTube(length=steelWidth/2 + halfCartWidth + steelWidth + toDiag(steelWidth), center=true);
+      doorTube(length=toDiag(horizontalLength - doorSteelWidth), center=true);
   // vertical
-  translate([0, steelWidth/2 + halfCartWidth, -toDiag(steelWidth/2) - gapRailToCart])
-    doorTube(length=toDiag(steelWidth + wheelRadius) + gapRailToCart,
+  translate([0, doorSteelWidth/2 + halfCartWidth, -toDiag(railSteelWidth/2) - extraGapRailToDoor])
+    doorTube(length=extraGapRailToDoor + toDiag(railSteelWidth) + 2*fromDiag(wheelRadius),
              center=true);
-  translate([0, 3*steelWidth/2 + halfCartWidth, -toDiag(steelWidth/2) - gapRailToCart])
-    doorTube(length=toDiag(steelWidth + wheelRadius) + gapRailToCart,
+  translate([0, 3*doorSteelWidth/2 + halfCartWidth, -toDiag(railSteelWidth/2) - extraGapRailToDoor])
+    doorTube(length=extraGapRailToDoor + toDiag(railSteelWidth) + 2*fromDiag(wheelRadius),
              center=true);
   // horizontal
   difference() {
-    translate([0, -steelWidth/2, steelWidth/2 + toDiag(steelWidth/2 + wheelRadius)])
+    scale([0.99, 1, 1]) // TODO remove hack
+    translate([0, 0, doorSteelWidth/2 + toDiag(railSteelWidth/2 + wheelRadius)])
       rotate(-90, [1, 0, 0])
-        doorTube(length=steelWidth/2 + halfCartWidth + 2*steelWidth,
+        doorTube(length=halfCartWidth + 2*doorSteelWidth,
                  center=true);
-    hull() scale([2, 1, 1])
+    *hull() scale([2, 1, 1]) // TODO uncomment
       cart(cartPosition);
   }
 }
 
-module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
+module doorFrame(doorHeight, doorWidth, doorSteelWidth) {
   module sides() {
-    module side() doorTube(length=doorHeight - steelWidth, center=true);
-    translate([0, 0, -doorHeight + steelWidth/2]) side();
-    translate([doorWidth, 0, -doorHeight + steelWidth/2]) side();
+    module side() doorTube(length=doorHeight - doorSteelWidth, center=true);
+    translate([0, 0, -doorHeight + doorSteelWidth/2]) side();
+    translate([doorWidth, 0, -doorHeight + doorSteelWidth/2]) side();
   }
   module horizontals() {
     module horizontalPositions() {
-      translate([0, 0, -doorHeight + steelWidth])
+      translate([0, 0, -doorHeight + doorSteelWidth])
         rotate(90, [0, 1, 0])
           {
             children();
-            translate([-(doorHeight - steelWidth)/2, 0, 0]) children();
-            translate([-(doorHeight - steelWidth), 0, 0]) children();
+            translate([-(doorHeight - doorSteelWidth)/2, 0, 0]) children();
+            translate([-(doorHeight - doorSteelWidth), 0, 0]) children();
           }
     }
     horizontalPositions()
-      doorTube(length=doorWidth - steelWidth, center=true);
+      doorTube(length=doorWidth - doorSteelWidth, center=true);
   }
   module diagBracing() {
     module oneSlash() {
@@ -217,7 +233,7 @@ module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
                  center=true);
     }
     module twoSlash() {
-      translate([0, 0, -(doorHeight/2 - steelWidth)/2]) {
+      translate([0, 0, -(doorHeight/2 - doorSteelWidth)/2]) {
         oneSlash();
         rotate(180, [1, 0, 0])
           oneSlash();
@@ -237,7 +253,7 @@ module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
     rightBracing();
   }
   sides();
-  translate([+steelWidth/2, 0, 0])
+  translate([+doorSteelWidth/2, 0, 0])
     horizontals();
   diagBracing();
 }
@@ -245,25 +261,25 @@ module doorFrame(doorHeight, doorWidth, steelWidth, steelThickness) {
 module rail() {
   translate([-extraRail, 0, 0]) rotate(90, [0, 1, 0])
     rotate(45, [0, 0, 1])
-      doorTube(length=2*doorWidth + 2*extraRail,
+      railTube(length=2*doorWidth + 2*extraRail,
                center=true);
   module bracket() {
-    translate([0, toDiag(steelWidth/2), -steelWidth/2])
+    translate([0, toDiag(doorSteelWidth/2), -doorSteelWidth/2])
       rotate(90, [1, 0, 0])
-        doorTube(length=halfCartWidth + toDiag(steelWidth), center=true);
-    translate([0, -halfCartWidth/2, -3*steelWidth/2])
+        doorTube(length=halfCartWidth + toDiag(doorSteelWidth), center=true);
+    translate([0, -halfCartWidth/2, -3*doorSteelWidth/2])
       rotate(90, [1, 0, 0])
-        doorTube(length=(halfCartWidth + toDiag(steelWidth))/2, center=true);
+        doorTube(length=(halfCartWidth + toDiag(doorSteelWidth))/2, center=true);
     translate([0,
-                -(halfCartWidth + toDiag(steelWidth/2) + steelWidth/2),
-                -2*steelWidth])
-      doorTube(length=3*steelWidth, center=true);
+                -(halfCartWidth + toDiag(doorSteelWidth/2) + doorSteelWidth/2),
+                -2*doorSteelWidth])
+      doorTube(length=3*doorSteelWidth, center=true);
   }
-  translate([-extraRail + 3*steelWidth/2, 0, 0])
+  *translate([-extraRail + 3*doorSteelWidth/2, 0, 0])
     bracket();
-  translate([doorWidth, 0, 0])
+  *translate([doorWidth, 0, 0])
     bracket();
-  translate([2*doorWidth - (-extraRail + 3*steelWidth/2), 0, 0])
+  *translate([2*doorWidth - (-extraRail + 3*doorSteelWidth/2), 0, 0])
     bracket();
 }
 
@@ -277,8 +293,8 @@ module rollerDoor() {
         angleWheelRollerAssembly();
         cartDoorConnection();
       }
-    translate([0, 0, -steelWidth*sqrt(2)/2 - steelWidth/2 - gapRailToCart])
-      doorFrame(doorHeight, doorWidth, steelWidth, steelThickness);
+    translate([0, 0, -toDiag(railSteelWidth/2) - doorSteelWidth/2 - extraGapRailToDoor])
+      doorFrame(doorHeight, doorWidth, doorSteelWidth);
   }
 }
 
